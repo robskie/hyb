@@ -62,8 +62,15 @@ type block struct {
 	posts    []*bposting
 	boundary [2]int
 
+	index  int
 	length int
 }
+
+type byLen []block
+
+func (b byLen) Len() int           { return len(b) }
+func (b byLen) Less(i, j int) bool { return b[i].length > b[j].length }
+func (b byLen) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 
 type pblock struct {
 	ids   *bp128.PackedInts
@@ -173,11 +180,19 @@ func (b *Builder) Build() *Index {
 	}
 	b.docs = docs
 
+	// Return empty index if no postings
+	if len(posts) == 0 {
+		return &Index{}
+	}
+
 	// Create words array and sort in lexicographical order
+	nchars := 0
 	wordcount := 0
 	words := make([]string, 0, len(wordmap))
 	for word, wf := range wordmap {
 		words = append(words, word)
+
+		nchars += len(word)
 		wordcount += wf.freq
 	}
 	sort.Strings(words)
@@ -203,33 +218,21 @@ func (b *Builder) Build() *Index {
 	}
 
 	// Create blocks
-	const blockCount = 5
-	blocks := []block{}
-	nblock, sum := 0, 0
-	wstart, wend := 0, 0
-	blockSize := (wordcount / blockCount) + 1
-	wordblock := make([]int, len(wfreqs))
-	for i, freq := range freqs {
-		wend = i
-		wordblock[i] = nblock
-		sum += freq
-
-		if sum >= blockSize || i == len(wfreqs)-1 {
-			b := block{}
-			b.boundary[0] = wstart
-			b.boundary[1] = wend
-			blocks = append(blocks, b)
-
-			sum = 0
-			nblock++
-			wstart = i + 1
-		}
-	}
+	const nblocks = 5
+	blockSize := (wordcount / nblocks) + 1
+	avgCharPerWord := (nchars / len(words)) + 1
+	blocks, wordBlock := createBlocks(
+		nblocks,
+		blockSize,
+		words,
+		freqs,
+		avgCharPerWord,
+	)
 
 	// Put postings to blocks
 	for i, p := range posts {
 		widx := wordmap[*p.word].id
-		bidx := wordblock[widx]
+		bidx := wordBlock(widx)
 		blocks[bidx].posts = append(blocks[bidx].posts, &posts[i])
 	}
 
@@ -266,4 +269,92 @@ func (b *Builder) Build() *Index {
 		words:    words,
 		freqword: freqword,
 	}
+}
+
+// createBlocks creates blocks by grouping words
+// with the same prefix. This is done to minimize
+// merging when searching.
+func createBlocks(
+	nblocks int,
+	blockSize int,
+	words []string,
+	freqs []int,
+	avgCharPerWord int) ([]block, func(int) int) {
+
+	sum := make([]int, avgCharPerWord)
+	start := make([]int, avgCharPerWord)
+	blocks := make([][]block, avgCharPerWord)
+
+	prev := 0
+	for i, w := range words {
+		prefix := true
+		pw := words[prev]
+		minlen := min(len(pw), len(w))
+		for j := range blocks {
+			if !prefix || j >= minlen || pw[j] != w[j] {
+				prefix = false
+			}
+
+			if sum[j] >= blockSize && !prefix {
+				b := block{}
+				b.length = sum[j]
+				b.boundary[0] = start[j]
+				b.boundary[1] = prev
+				blocks[j] = append(blocks[j], b)
+
+				sum[j] = 0
+				start[j] = i
+			}
+
+			sum[j] += freqs[i]
+		}
+
+		prev = i
+	}
+
+	// Process the last block
+	lastw := len(words) - 1
+	for j := range blocks {
+		b := block{}
+		b.length = sum[j]
+		b.boundary[0] = start[j]
+		b.boundary[1] = lastw
+		blocks[j] = append(blocks[j], b)
+	}
+
+	blk := blocks[0]
+	for _, b := range blocks {
+		if len(b) >= nblocks {
+			blk = b
+			break
+		}
+	}
+
+	cblk := make([]block, len(blk))
+	copy(cblk, blk)
+	for i := range cblk {
+		cblk[i].index = i
+	}
+
+	sort.Sort(byLen(cblk))
+	mapFunc := func(w int) int {
+		for _, b := range cblk {
+			if w >= b.boundary[0] && w <= b.boundary[1] {
+				return b.index
+			}
+		}
+
+		// Should not reach here
+		return -1
+	}
+
+	return blk, mapFunc
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+
+	return b
 }

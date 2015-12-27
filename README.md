@@ -77,5 +77,5 @@ You can run this benchmark on your machine by typing this command
 ```go test github.com/robskie/hyb -bench=.*``` in terminal.
 
 ```
-BenchmarkIndexSearch-4	    1000	   2521888 ns/op
+BenchmarkIndexSearch-4	    1000	   1951418 ns/op
 ```
