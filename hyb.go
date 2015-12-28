@@ -134,7 +134,7 @@ func (idx *Index) Search(query []string, prev *Result) {
 
 			// If previous query is a prefix of the current
 			// query, just filter IDs not in word range.
-			filter(&prev.results, nil, wrange, idx.freqword)
+			prev.results = filter(prev.results, wrange, idx.freqword)
 		} else {
 			idx.search(q, prev)
 		}
@@ -182,21 +182,20 @@ func (idx *Index) search(query string, prev *Result) {
 		comps[i] = completion{wid, 0}
 		wid++
 	}
-	prev.completions = comps
 
-	// Intersect postings to blocks then filter
-	posts := make([][]iposting, 0, len(blocks))
+	// Intersect postings to blocks
+	var posts []iposting
+	postings := make([][]iposting, 0, len(blocks))
 	for _, b := range blocks {
-		p := intersect(prev.results, b)
-		filter(&p, &prev.completions, wrange, idx.freqword)
-
-		if len(p) > 0 {
-			posts = append(posts, p)
+		posts, comps = intersect(prev.results, b, comps, wrange, idx.freqword)
+		if len(posts) > 0 {
+			postings = append(postings, posts)
 		}
 	}
+	prev.completions = comps
 
 	// Merge postings
-	merge(&prev.results, posts)
+	merge(&prev.results, postings)
 }
 
 func merge(results *[]iposting, posts [][]iposting) {
@@ -231,53 +230,50 @@ func merge(results *[]iposting, posts [][]iposting) {
 	}
 }
 
-// filter removes IDs with words not in the
-// word range. It also computes the number of
-// hits per word that is in the word range.
+// filter removes IDs with
+// words not in the word range.
 func filter(
-	posts *[]iposting,
-	comps *[]completion,
+	posts []iposting,
 	wrange *[2]uint32,
-	freqword []uint32) {
+	freqword []uint32) []iposting {
 
 	if wrange == nil {
-		*posts = nil
-		*comps = nil
-		return
+		return nil
 	}
 
-	offset := wrange[0]
-	filtered := (*posts)[:0]
-	for _, p := range *posts {
+	out := posts[:0]
+	for _, p := range posts {
 		wid := freqword[p.word]
 		if wid >= wrange[0] && wid <= wrange[1] {
-			filtered = append(filtered, p)
-
-			if comps != nil {
-				(*comps)[wid-offset].hits++
-			}
+			out = append(out, p)
 		}
 	}
-	*posts = filtered
+
+	return out
 }
 
-func intersect(results []iposting, b *pblock) []iposting {
+func intersect(
+	results []iposting,
+	block *pblock,
+	comps []completion,
+	wrange *[2]uint32,
+	freqword []uint32) ([]iposting, []completion) {
+
 	const offset = 4
 	const chunkSize = 2048
 	buffer := make([]uint32, (chunkSize+offset)*3)
 
+	ids := align(buffer[0:])
+	words := align(ids[chunkSize:])
+	ranks := align(words[chunkSize:])
+
 	out := []iposting{}
 	if len(results) == 0 {
-		out = make([]iposting, 0, b.length)
+		out = make([]iposting, 0, block.length)
 	}
 
 	i, j := 0, 0
-	for _, p := range b.posts {
-		length := p.ids.Len()
-		ids := align(buffer[0:])
-		words := align(ids[length:])
-		ranks := align(words[length:])
-
+	for _, p := range block.posts {
 		bp128.Unpack(p.ids, &ids)
 		bp128.Unpack(p.words, &words)
 		bp128.Unpack(p.ranks, &ranks)
@@ -289,19 +285,31 @@ func intersect(results []iposting, b *pblock) []iposting {
 				} else if results[i].id > ids[j] {
 					j++
 				} else {
-					ip := iposting{ids[j], words[j], ranks[j]}
-					out = append(out, ip)
+					wid := freqword[words[j]]
+					if wid >= wrange[0] && wid <= wrange[1] {
+						ip := iposting{ids[j], words[j], ranks[j]}
+						out = append(out, ip)
+
+						comps[wid-wrange[0]].hits++
+					}
+
 					j++
 				}
 			}
 		} else {
 			for j := range ids {
-				out = append(out, iposting{ids[j], words[j], ranks[j]})
+				wid := freqword[words[j]]
+				if wid >= wrange[0] && wid <= wrange[1] {
+					ip := iposting{ids[j], words[j], ranks[j]}
+					out = append(out, ip)
+
+					comps[wid-wrange[0]].hits++
+				}
 			}
 		}
 	}
 
-	return out
+	return out, comps
 }
 
 // continuation returns true if the current
