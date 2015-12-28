@@ -76,6 +76,8 @@ type cposting struct {
 	ids   *bp128.PackedInts
 	words *bp128.PackedInts
 	ranks *bp128.PackedInts
+
+	iboundary uint32
 }
 
 func (p *cposting) GobEncode() ([]byte, error) {
@@ -86,6 +88,7 @@ func (p *cposting) GobEncode() ([]byte, error) {
 		enc.Encode(p.ids),
 		enc.Encode(p.words),
 		enc.Encode(p.ranks),
+		enc.Encode(p.iboundary),
 	)
 
 	return buf.Bytes(), err
@@ -99,6 +102,7 @@ func (p *cposting) GobDecode(data []byte) error {
 		dec.Decode(&p.ids),
 		dec.Decode(&p.words),
 		dec.Decode(&p.ranks),
+		dec.Decode(&p.iboundary),
 	)
 
 	return err
@@ -293,6 +297,8 @@ func (b *Builder) Build() *Index {
 			posts[k].ids = bp128.DeltaPack(pids[start:end])
 			posts[k].words = bp128.Pack(pwords[start:end])
 			posts[k].ranks = bp128.Pack(pranks[start:end])
+
+			posts[k].iboundary = pids[end-1]
 		}
 
 		// Create packed block

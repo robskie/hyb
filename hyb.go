@@ -274,6 +274,14 @@ func intersect(
 
 	i, j := 0, 0
 	for _, p := range block.posts {
+		if len(results) > 0 {
+			if i >= len(results) {
+				break
+			} else if results[i].id > p.iboundary {
+				continue
+			}
+		}
+
 		bp128.Unpack(p.ids, &ids)
 		bp128.Unpack(p.words, &words)
 		bp128.Unpack(p.ranks, &ranks)
