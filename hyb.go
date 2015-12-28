@@ -261,42 +261,46 @@ func filter(
 	*posts = filtered
 }
 
-func intersect(results []iposting, block *pblock) []iposting {
-	// Unpack blocks
+func intersect(results []iposting, b *pblock) []iposting {
 	const offset = 4
-	blen := block.ids.Len()
-	buffer := make([]uint32, (blen+offset)*3)
+	const chunkSize = 2048
+	buffer := make([]uint32, (chunkSize+offset)*3)
 
-	ids := align(buffer[0:])
-	words := align(ids[blen:])
-	ranks := align(words[blen:])
-
-	bp128.Unpack(block.ids, &ids)
-	bp128.Unpack(block.words, &words)
-	bp128.Unpack(block.ranks, &ranks)
-
-	// If there are no previous
-	// results, copy the block to output
 	out := []iposting{}
 	if len(results) == 0 {
-		out = make([]iposting, blen)
-		for i := 0; i < blen; i++ {
-			out[i] = iposting{ids[i], words[i], ranks[i]}
-		}
-		return out
+		out = make([]iposting, 0, b.length)
 	}
 
-	// Intersect results with block
-	for i, j := 0, 0; i < len(results); i++ {
-		for ; j < blen; j++ {
-			if ids[j] > results[i].id {
-				break
-			} else if ids[j] == results[i].id {
-				ip := iposting{ids[j], words[j], ranks[j]}
-				out = append(out, ip)
+	i, j := 0, 0
+	for _, p := range b.posts {
+		length := p.ids.Len()
+		ids := align(buffer[0:])
+		words := align(ids[length:])
+		ranks := align(words[length:])
+
+		bp128.Unpack(p.ids, &ids)
+		bp128.Unpack(p.words, &words)
+		bp128.Unpack(p.ranks, &ranks)
+
+		if len(results) > 0 {
+			for j = 0; i < len(results) && j < len(ids); {
+				if results[i].id < ids[j] {
+					i++
+				} else if results[i].id > ids[j] {
+					j++
+				} else {
+					ip := iposting{ids[j], words[j], ranks[j]}
+					out = append(out, ip)
+					j++
+				}
+			}
+		} else {
+			for j := range ids {
+				out = append(out, iposting{ids[j], words[j], ranks[j]})
 			}
 		}
 	}
+
 	return out
 }
 

@@ -72,10 +72,41 @@ func (b byLen) Len() int           { return len(b) }
 func (b byLen) Less(i, j int) bool { return b[i].length > b[j].length }
 func (b byLen) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 
-type pblock struct {
+type cposting struct {
 	ids   *bp128.PackedInts
 	words *bp128.PackedInts
 	ranks *bp128.PackedInts
+}
+
+func (p *cposting) GobEncode() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := gob.NewEncoder(buf)
+
+	err := checkErr(
+		enc.Encode(p.ids),
+		enc.Encode(p.words),
+		enc.Encode(p.ranks),
+	)
+
+	return buf.Bytes(), err
+}
+
+func (p *cposting) GobDecode(data []byte) error {
+	buf := bytes.NewReader(data)
+	dec := gob.NewDecoder(buf)
+
+	err := checkErr(
+		dec.Decode(&p.ids),
+		dec.Decode(&p.words),
+		dec.Decode(&p.ranks),
+	)
+
+	return err
+}
+
+type pblock struct {
+	posts  []cposting
+	length int
 
 	boundary  [2]int
 	wboundary [2]string
@@ -86,9 +117,8 @@ func (b *pblock) GobEncode() ([]byte, error) {
 	enc := gob.NewEncoder(buf)
 
 	err := checkErr(
-		enc.Encode(b.ids),
-		enc.Encode(b.words),
-		enc.Encode(b.ranks),
+		enc.Encode(b.posts),
+		enc.Encode(b.length),
 		enc.Encode(b.boundary),
 		enc.Encode(b.wboundary),
 	)
@@ -101,9 +131,8 @@ func (b *pblock) GobDecode(data []byte) error {
 	dec := gob.NewDecoder(buf)
 
 	err := checkErr(
-		dec.Decode(&b.ids),
-		dec.Decode(&b.words),
-		dec.Decode(&b.ranks),
+		dec.Decode(&b.posts),
+		dec.Decode(&b.length),
 		dec.Decode(&b.boundary),
 		dec.Decode(&b.wboundary),
 	)
@@ -241,20 +270,35 @@ func (b *Builder) Build() *Index {
 	for i, blk := range blocks {
 
 		// Create arrays for packing
-		pids := make([]uint32, len(blk.posts))
-		pwords := make([]uint32, len(blk.posts))
-		pranks := make([]uint32, len(blk.posts))
-		for i, p := range blk.posts {
-			pids[i] = uint32(p.id)
-			pranks[i] = uint32(p.rank)
-			pwords[i] = uint32(wordmap[*p.word].freq)
+		pids := make([]uint32, blk.length)
+		pwords := make([]uint32, blk.length)
+		pranks := make([]uint32, blk.length)
+		for j, p := range blk.posts {
+			pids[j] = uint32(p.id)
+			pranks[j] = uint32(p.rank)
+			pwords[j] = uint32(wordmap[*p.word].freq)
+		}
+
+		const chunkSize = 2048
+		nchunks := blk.length / chunkSize
+		if blk.length%chunkSize > 0 {
+			nchunks++
+		}
+
+		posts := make([]cposting, nchunks)
+		for k := range posts {
+			start := k * chunkSize
+			end := min(start+chunkSize, blk.length)
+
+			posts[k].ids = bp128.DeltaPack(pids[start:end])
+			posts[k].words = bp128.Pack(pwords[start:end])
+			posts[k].ranks = bp128.Pack(pranks[start:end])
 		}
 
 		// Create packed block
 		pb := &pblock{}
-		pb.ids = bp128.DeltaPack(pids)
-		pb.words = bp128.Pack(pwords)
-		pb.ranks = bp128.Pack(pranks)
+		pb.posts = posts
+		pb.length = blk.length
 		pb.boundary = blk.boundary
 		pb.wboundary = [2]string{
 			words[blk.boundary[0]],

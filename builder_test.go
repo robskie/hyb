@@ -77,8 +77,14 @@ Exit:
 	for id, words := range idwords {
 		nwords, ok := nidwords[id]
 
-		assert.True(t, ok)
-		assert.Equal(t, len(words), len(nwords))
+		if !assert.True(t, ok) {
+			break
+		}
+
+		if !assert.Equal(t, len(words), len(nwords)) {
+			break
+		}
+
 		for _, w := range nwords {
 			if !assert.Contains(t, words, w) {
 				break Exit
@@ -91,18 +97,20 @@ Exit:
 // a map with document id as key and document
 // keywords as value.
 func parseIndex(index *Index) map[int][]string {
+	ids := []uint32{}
+	words := []uint32{}
 	idwords := map[int][]string{}
 	for _, b := range index.blocks {
-		ids := []uint32{}
-		words := []uint32{}
-		bp128.Unpack(b.ids, &ids)
-		bp128.Unpack(b.words, &words)
+		for _, p := range b.posts {
+			bp128.Unpack(p.ids, &ids)
+			bp128.Unpack(p.words, &words)
 
-		for i, id := range ids {
-			word := index.words[index.freqword[words[i]]]
-			wslice := idwords[int(id)]
-			wslice = append(wslice, word)
-			idwords[int(id)] = wslice
+			for i, id := range ids {
+				word := index.words[index.freqword[words[i]]]
+				wslice := idwords[int(id)]
+				wslice = append(wslice, word)
+				idwords[int(id)] = wslice
+			}
 		}
 	}
 
