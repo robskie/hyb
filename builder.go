@@ -158,6 +158,8 @@ func NewBuilder() *Builder {
 
 // Add adds a document given its ID, search keywords, and rank.
 func (b *Builder) Add(id int, keywords []string, rank int) {
+	sort.Strings(keywords)
+
 	d := doc{id, keywords, rank, b.count, false}
 	b.docs = append(b.docs, d)
 

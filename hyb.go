@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -289,11 +290,13 @@ func intersect(
 		bp128.Unpack(p.words, &words)
 		bp128.Unpack(p.ranks, &ranks)
 
+		var pid, pwid uint32 = math.MaxUint32, math.MaxUint32
 		if len(results) > 0 {
 			for j = 0; i < len(results) && j < len(ids); {
-				if results[i].id < ids[j] {
+				id := results[i].id
+				if id < ids[j] {
 					i++
-				} else if results[i].id > ids[j] {
+				} else if id > ids[j] {
 					j++
 				} else {
 					wid := freqword[words[j]]
@@ -301,20 +304,30 @@ func intersect(
 						ip := iposting{ids[j], wid, ranks[j]}
 						out = append(out, ip)
 
-						comps[wid-wrange[0]].hits++
+						if pid != id || pwid != wid {
+							comps[wid-wrange[0]].hits++
+						}
+
+						pid = id
+						pwid = wid
 					}
 
 					j++
 				}
 			}
 		} else {
-			for j := range ids {
+			for j, id := range ids {
 				wid := freqword[words[j]]
 				if wid >= wrange[0] && wid <= wrange[1] {
-					ip := iposting{ids[j], wid, ranks[j]}
+					ip := iposting{id, wid, ranks[j]}
 					out = append(out, ip)
 
-					comps[wid-wrange[0]].hits++
+					if pid != id || pwid != wid {
+						comps[wid-wrange[0]].hits++
+					}
+
+					pid = id
+					pwid = wid
 				}
 			}
 		}

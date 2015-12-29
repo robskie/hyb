@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -127,7 +126,6 @@ Exit:
 				break Exit
 			}
 			if !assert.Equal(t, completions, actualComps) {
-				fmt.Println(query)
 				break Exit
 			}
 			if !assert.Equal(t, completions, topComps) {
@@ -249,11 +247,15 @@ func search(docs [][]string, query []string) ([]int, []Completion) {
 // prefixes returns all the strings in words
 // that is a prefix of the query string.
 func prefixes(query string, words []string) []string {
+	sort.Strings(words)
+
+	prev := ""
 	res := []string{}
 	for _, w := range words {
-		if strings.HasPrefix(w, query) {
+		if strings.HasPrefix(w, query) && prev != w {
 			res = append(res, w)
 		}
+		prev = w
 	}
 
 	return res
