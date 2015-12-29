@@ -135,7 +135,7 @@ func (idx *Index) Search(query []string, prev *Result) {
 
 			// If previous query is a prefix of the current
 			// query, just filter IDs not in word range.
-			prev.results = filter(prev.results, wrange, idx.freqword)
+			prev.results = filter(prev.results, wrange)
 		} else {
 			idx.search(q, prev)
 		}
@@ -240,19 +240,14 @@ func merge(results *[]iposting, posts [][]iposting) {
 
 // filter removes IDs with
 // words not in the word range.
-func filter(
-	posts []iposting,
-	wrange *[2]uint32,
-	freqword []uint32) []iposting {
-
+func filter(posts []iposting, wrange *[2]uint32) []iposting {
 	if wrange == nil {
 		return nil
 	}
 
 	out := posts[:0]
 	for _, p := range posts {
-		wid := freqword[p.word]
-		if wid >= wrange[0] && wid <= wrange[1] {
+		if p.word >= wrange[0] && p.word <= wrange[1] {
 			out = append(out, p)
 		}
 	}
@@ -303,7 +298,7 @@ func intersect(
 				} else {
 					wid := freqword[words[j]]
 					if wid >= wrange[0] && wid <= wrange[1] {
-						ip := iposting{ids[j], words[j], ranks[j]}
+						ip := iposting{ids[j], wid, ranks[j]}
 						out = append(out, ip)
 
 						comps[wid-wrange[0]].hits++
@@ -316,7 +311,7 @@ func intersect(
 			for j := range ids {
 				wid := freqword[words[j]]
 				if wid >= wrange[0] && wid <= wrange[1] {
-					ip := iposting{ids[j], words[j], ranks[j]}
+					ip := iposting{ids[j], wid, ranks[j]}
 					out = append(out, ip)
 
 					comps[wid-wrange[0]].hits++
