@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/robskie/bp128"
@@ -364,13 +365,8 @@ func getWordRange(query string, words []string, offset int) *[2]uint32 {
 	}
 
 	// Get the last prefix word
-	rend := rstart
-	for _, w := range words[rstart+1:] {
-		if !strings.HasPrefix(w, query) {
-			break
-		}
-		rend++
-	}
+	query += string(utf8.MaxRune)
+	rend := rstart + sort.SearchStrings(words[rstart:], query) - 1
 
 	return &[2]uint32{uint32(rstart + offset), uint32(rend + offset)}
 }
