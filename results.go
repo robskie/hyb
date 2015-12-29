@@ -148,8 +148,10 @@ type Result struct {
 	query   []string
 	results []iposting
 
-	words       []string
-	wrange      *[2]uint32
+	words  []string
+	wrange *[2]uint32
+
+	compbuf     []completion
 	completions []completion
 }
 

@@ -176,9 +176,16 @@ func (idx *Index) search(query string, prev *Result) {
 		return
 	}
 
+	// Extend completions buffer if necessary
+	rlen := int(wrange[1] - wrange[0] + 1)
+	extension := rlen - len(prev.compbuf)
+	if extension > 0 {
+		prev.compbuf = append(prev.compbuf, make([]completion, extension)...)
+	}
+
 	// Create completions
 	wid := wrange[0]
-	comps := make([]completion, wrange[1]-wrange[0]+1)
+	comps := prev.compbuf[:rlen]
 	for i := range comps {
 		comps[i] = completion{wid, 0}
 		wid++
