@@ -252,16 +252,19 @@ func (b *Builder) Build() *Index {
 		wf.freq = i
 	}
 
+	// Create character frequency array
+	cavg := ((nchars / len(words)) / 2) + 1
+	charfreq := getCharFreq(words, freqs, cavg)
+
 	// Create blocks
 	const nblocks = 5
 	blockSize := (wordcount / nblocks) + 1
-	avgCharPerWord := (nchars / len(words)) + 1
 	blocks, wordBlock := createBlocks(
 		nblocks,
 		blockSize,
 		words,
 		freqs,
-		avgCharPerWord,
+		cavg,
 	)
 
 	// Put postings to blocks
@@ -320,6 +323,7 @@ func (b *Builder) Build() *Index {
 		blocks:   pblocks,
 		words:    words,
 		freqword: freqword,
+		charfreq: charfreq,
 	}
 }
 
@@ -331,11 +335,11 @@ func createBlocks(
 	blockSize int,
 	words []string,
 	freqs []int,
-	avgCharPerWord int) ([]block, func(int) int) {
+	cavg int) ([]block, func(int) int) {
 
-	sum := make([]int, avgCharPerWord)
-	start := make([]int, avgCharPerWord)
-	blocks := make([][]block, avgCharPerWord)
+	sum := make([]int, cavg)
+	start := make([]int, cavg)
+	blocks := make([][]block, cavg)
 
 	prev := 0
 	for i, w := range words {
@@ -401,6 +405,58 @@ func createBlocks(
 	}
 
 	return blk, mapFunc
+}
+
+// getCharFreq returns a [x][y]uint32 array (cfreq) which contains
+// the maximum frequency of a character (x) given its position (y)
+// taking into account the frequency of the previous character.
+// For example, given the word-frequency pairs:
+// aab - 1
+// abc - 2
+// bbc - 3
+// ddc - 4
+// cfreq['b'][1] = max(freq(abc), freq(bbc)) = 3
+// cfreq['c'][2] = max(freq(abc) + freq(bbc), freq(ddc)) = 5
+func getCharFreq(words []string, freqs []int, cavg int) [][]uint32 {
+	cfreq := make([][]uint32, 256)
+	for i := range cfreq {
+		cfreq[i] = make([]uint32, cavg)
+	}
+
+	// For cfreq[x][0] (first word position),
+	// just add all the occurrences of the words
+	// that have their first character set to x.
+	for i, w := range words {
+		cfreq[w[0]][0] += uint32(freqs[i])
+	}
+
+	// For the succeeding word positions, assume that
+	// S is the set of all characters that precedes the
+	// character at position i, and x is the character at
+	// position i. Then cfreq[x][i] is the maximum frequency
+	// among all the frequencies of characters in S.
+	for i := 1; i < cavg; i++ {
+		ctmp := [256][256]int{}
+
+		for j, w := range words {
+			if i < len(w) {
+				ctmp[w[i]][w[i-1]] += freqs[j]
+			}
+		}
+
+		for j := range ctmp {
+			max := 0
+			for _, v := range ctmp[j] {
+				if v > max {
+					max = v
+				}
+			}
+
+			cfreq[j][i] = uint32(max)
+		}
+	}
+
+	return cfreq
 }
 
 func min(a, b int) int {

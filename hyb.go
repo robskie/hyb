@@ -56,6 +56,11 @@ type Index struct {
 	// frequency (index) to word
 	// id (value).
 	freqword []uint32
+
+	// charfreq[x][y] returns the
+	// max frequency of a character (x)
+	// given its word position (y).
+	charfreq [][]uint32
 }
 
 // NewIndex returns an empty index.
@@ -72,6 +77,7 @@ func (idx *Index) Write(w io.Writer) error {
 		enc.Encode(idx.blocks),
 		enc.Encode(idx.words),
 		enc.Encode(idx.freqword),
+		enc.Encode(idx.charfreq),
 	)
 
 	if err != nil {
@@ -89,6 +95,7 @@ func (idx *Index) Read(r io.Reader) error {
 		dec.Decode(&idx.blocks),
 		dec.Decode(&idx.words),
 		dec.Decode(&idx.freqword),
+		dec.Decode(&idx.charfreq),
 	)
 
 	if err != nil {
@@ -192,11 +199,25 @@ func (idx *Index) search(query string, prev *Result) {
 		wid++
 	}
 
+	// Estimate number of results
+	cout := 0
+	if len(prev.results) == 0 {
+		cout = calcLen(query, idx.charfreq)
+	}
+
 	// Intersect postings to blocks
 	var posts []iposting
 	postings := make([][]iposting, 0, len(blocks))
 	for _, b := range blocks {
-		posts, comps = intersect(prev.results, b, comps, wrange, idx.freqword)
+		posts, comps = intersect(
+			prev.results,
+			comps,
+			cout,
+			b,
+			wrange,
+			idx.freqword,
+		)
+
 		if len(posts) > 0 {
 			postings = append(postings, posts)
 		}
@@ -258,8 +279,9 @@ func filter(posts []iposting, wrange *[2]uint32) []iposting {
 
 func intersect(
 	results []iposting,
-	block *pblock,
 	comps []completion,
+	cout int,
+	block *pblock,
 	wrange *[2]uint32,
 	freqword []uint32) ([]iposting, []completion) {
 
@@ -271,12 +293,8 @@ func intersect(
 	words := align(ids[chunkSize:])
 	ranks := align(words[chunkSize:])
 
-	out := []iposting{}
-	if len(results) == 0 {
-		out = make([]iposting, 0, block.length)
-	}
-
 	i, j := 0, 0
+	out := make([]iposting, 0, cout)
 	for _, p := range block.posts {
 		if len(results) > 0 {
 			if i >= len(results) {
@@ -384,6 +402,20 @@ func getWordRange(query string, words []string, offset int) *[2]uint32 {
 	rend := rstart + sort.SearchStrings(words[rstart:], query) - 1
 
 	return &[2]uint32{uint32(rstart + offset), uint32(rend + offset)}
+}
+
+// calcLen estimates the number of words that matches the query.
+func calcLen(query string, charfreq [][]uint32) int {
+	cout := math.MaxUint32
+	cmax := len(charfreq[0])
+	for i := 0; i < len(query) && i < cmax; i++ {
+		cf := int(charfreq[query[i]][i])
+		if cout > cf {
+			cout = cf
+		}
+	}
+
+	return cout
 }
 
 // align returns a 16-byte aligned subarray
