@@ -378,7 +378,7 @@ func createBlocks(
 		blocks[j] = append(blocks[j], b)
 	}
 
-	blk := blocks[0]
+	blk := blocks[len(blocks)-1]
 	for _, b := range blocks {
 		if len(b) >= nblocks {
 			blk = b
