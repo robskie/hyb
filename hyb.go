@@ -84,10 +84,10 @@ func (idx *Index) Write(w io.Writer) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("hyb: write failed (%v)", err)
+		err = fmt.Errorf("hyb: write failed (%v)", err)
 	}
 
-	return nil
+	return err
 }
 
 // Read deserializes the index.
@@ -103,10 +103,10 @@ func (idx *Index) Read(r io.Reader) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("hyb: read failed (%v)", err)
+		err = fmt.Errorf("hyb: read failed (%v)", err)
 	}
 
-	return nil
+	return err
 }
 
 // Size returns the size of the index in bytes.
@@ -174,7 +174,7 @@ func (idx *Index) search(query string, prev *Result) {
 		// The first condition in the parenthesis finds the first
 		// block that contains the query. The or'd condition finds
 		// the succeeding blocks.
-		if (b.wboundary[0] <= query && b.wboundary[1] >= query) ||
+		if (query >= b.wboundary[0] && query <= b.wboundary[1]) ||
 			strings.HasPrefix(b.wboundary[0], query) {
 
 			blocks = append(blocks, b)
@@ -253,13 +253,13 @@ func merge(results *[]iposting, posts [][]iposting) {
 
 	// Perform k-way merge
 	heap.Init(h)
-	*results = (*results)[:0]
+	out := (*results)[:0]
 	for h.Len() > 0 {
 		e := heap.Pop(h).(mergeElem)
 
 		slice := *e.ptr
 		p := slice[e.idx]
-		*results = append(*results, p)
+		out = append(out, p)
 
 		e.idx++
 		if e.idx < len(slice) {
@@ -267,6 +267,8 @@ func merge(results *[]iposting, posts [][]iposting) {
 			heap.Push(h, e)
 		}
 	}
+
+	*results = out
 }
 
 // filter removes IDs with
@@ -277,9 +279,10 @@ func filter(posts []iposting, wrange *[2]uint32) []iposting {
 	}
 
 	out := posts[:0]
-	for _, p := range posts {
-		if p.word >= wrange[0] && p.word <= wrange[1] {
-			out = append(out, p)
+	for i := range posts {
+		wid := posts[i].word
+		if wid >= wrange[0] && wid <= wrange[1] {
+			out = append(out, posts[i])
 		}
 	}
 
@@ -320,22 +323,24 @@ func intersect(
 		var pid, pwid uint32 = math.MaxUint32, math.MaxUint32
 		if len(results) > 0 {
 			for j = 0; i < len(results) && j < len(ids); {
-				id := results[i].id
-				if id < ids[j] {
+				jid := ids[j]
+				rid := results[i].id
+
+				if rid < jid {
 					i++
-				} else if id > ids[j] {
+				} else if rid > jid {
 					j++
 				} else {
 					wid := freqword[words[j]]
 					if wid >= wrange[0] && wid <= wrange[1] {
-						ip := iposting{ids[j], wid, ranks[j]}
+						ip := iposting{rid, wid, ranks[j]}
 						out = append(out, ip)
 
-						if pid != id || pwid != wid {
+						if pid != rid || pwid != wid {
 							comps[wid-wrange[0]].hits++
 						}
 
-						pid = id
+						pid = rid
 						pwid = wid
 					}
 
@@ -343,9 +348,10 @@ func intersect(
 				}
 			}
 		} else {
-			for j, id := range ids {
-				wid := freqword[words[j]]
+			for j, wf := range words {
+				wid := freqword[wf]
 				if wid >= wrange[0] && wid <= wrange[1] {
+					id := ids[j]
 					ip := iposting{id, wid, ranks[j]}
 					out = append(out, ip)
 

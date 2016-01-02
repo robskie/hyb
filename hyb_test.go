@@ -34,9 +34,9 @@ func TestMerge(t *testing.T) {
 		}
 	}
 
-	res := &[]iposting{}
-	merge(res, posts)
-	for i, v := range *res {
+	res := []iposting{}
+	merge(&res, posts)
+	for i, v := range res {
 		if !assert.Equal(t, out[i], v.id) {
 			break
 		}

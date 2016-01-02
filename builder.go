@@ -206,9 +206,7 @@ func (b *Builder) Build() *Index {
 
 				p := bposting{d.id, &d.words[j], d.rank}
 				posts = append(posts, p)
-
 			}
-
 			docs = append(docs, d)
 		}
 		pid = d.id

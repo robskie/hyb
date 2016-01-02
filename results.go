@@ -240,6 +240,7 @@ func (r *Result) TopCompletions(k int) *Completions {
 			heap.Push(h, c)
 		}
 	}
+
 	sort.Sort(byHits(*h))
 
 	return &Completions{*h, -1, r.words}
