@@ -61,6 +61,8 @@ type Index struct {
 	// max frequency of a character (x)
 	// given its word position (y).
 	charfreq [][]uint32
+
+	size int
 }
 
 // NewIndex returns an empty index.
@@ -78,6 +80,7 @@ func (idx *Index) Write(w io.Writer) error {
 		enc.Encode(idx.words),
 		enc.Encode(idx.freqword),
 		enc.Encode(idx.charfreq),
+		enc.Encode(idx.size),
 	)
 
 	if err != nil {
@@ -96,6 +99,7 @@ func (idx *Index) Read(r io.Reader) error {
 		dec.Decode(&idx.words),
 		dec.Decode(&idx.freqword),
 		dec.Decode(&idx.charfreq),
+		dec.Decode(&idx.size),
 	)
 
 	if err != nil {
@@ -103,6 +107,11 @@ func (idx *Index) Read(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// Size returns the size of the index in bytes.
+func (idx *Index) Size() int {
+	return idx.size
 }
 
 // Search performs a search on the index given a query.

@@ -319,11 +319,24 @@ func (b *Builder) Build() *Index {
 		pblocks[i] = pb
 	}
 
+	// Caculate index size
+	size := nchars
+	size += 4 * len(freqword)
+	size += 4 * (256 * len(charfreq[0]))
+	for _, b := range pblocks {
+		for _, p := range b.posts {
+			size += p.ids.Size()
+			size += p.words.Size()
+			size += p.ranks.Size()
+		}
+	}
+
 	return &Index{
 		blocks:   pblocks,
 		words:    words,
 		freqword: freqword,
 		charfreq: charfreq,
+		size:     size,
 	}
 }
 
