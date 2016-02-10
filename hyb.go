@@ -1,3 +1,10 @@
+// Package hyb implements the HYB structure described in the paper — Type Less,
+// Find More: Fast Autocompletion Search with a Succinct Index by Holger Bast
+// and Ingmar Weber. It provides an index which gives the word completions of
+// the last query word and returns the best hits for any of those completions.
+//
+// See https://people.mpi-inf.mpg.de/~bast/papers/autocompletion-sigir.pdf for
+// more details.
 package hyb
 
 import (
