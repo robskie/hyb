@@ -8,6 +8,15 @@ import (
 	"github.com/robskie/bp128"
 )
 
+const (
+	// numBlocks is the nominal number of blocks.
+	numBlocks = 5
+
+	// postingsChunkSize is the maximum number
+	// of IDs per compressed postings chunk.
+	postingsChunkSize = 2048
+)
+
 type doc struct {
 	id    int
 	words []string
@@ -255,10 +264,9 @@ func (b *Builder) Build() *Index {
 	charfreq := getCharFreq(words, freqs, cavg)
 
 	// Create blocks
-	const nblocks = 5
-	blockSize := (wordcount / nblocks) + 1
+	blockSize := (wordcount / numBlocks) + 1
 	blocks, wordBlock := createBlocks(
-		nblocks,
+		numBlocks,
 		blockSize,
 		words,
 		freqs,
@@ -286,16 +294,15 @@ func (b *Builder) Build() *Index {
 			pwords[j] = uint32(wordmap[*p.word].freq)
 		}
 
-		const chunkSize = 2048
-		nchunks := blk.length / chunkSize
-		if blk.length%chunkSize > 0 {
+		nchunks := blk.length / postingsChunkSize
+		if blk.length%postingsChunkSize > 0 {
 			nchunks++
 		}
 
 		posts := make([]cposting, nchunks)
 		for k := range posts {
-			start := k * chunkSize
-			end := min(start+chunkSize, blk.length)
+			start := k * postingsChunkSize
+			end := min(start+postingsChunkSize, blk.length)
 
 			posts[k].ids = bp128.DeltaPack(pids[start:end])
 			posts[k].words = bp128.Pack(pwords[start:end])

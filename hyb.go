@@ -318,12 +318,11 @@ func intersect(
 	freqword []uint32) ([]iposting, []completion) {
 
 	const offset = 4
-	const chunkSize = 2048
-	buffer := make([]uint32, (chunkSize+offset)*3)
+	buffer := make([]uint32, (postingsChunkSize+offset)*3)
 
 	ids := align(buffer[0:])
-	words := align(ids[chunkSize:])
-	ranks := align(words[chunkSize:])
+	words := align(ids[postingsChunkSize:])
+	ranks := align(words[postingsChunkSize:])
 
 	i, j := 0, 0
 	out := make([]iposting, 0, cout)
