@@ -1,6 +1,7 @@
 package hyb
 
 import (
+	"bytes"
 	"container/heap"
 	"encoding/gob"
 	"fmt"
@@ -73,7 +74,18 @@ func NewIndex() *Index {
 
 // Write serializes the index.
 func (idx *Index) Write(w io.Writer) error {
-	enc := gob.NewEncoder(w)
+	return gob.NewEncoder(w).Encode(idx)
+}
+
+// Read deserializes the index.
+func (idx *Index) Read(r io.Reader) error {
+	return gob.NewDecoder(r).Decode(idx)
+}
+
+// GobEncode transforms an index into gob streams.
+func (idx *Index) GobEncode() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := gob.NewEncoder(buf)
 
 	err := checkErr(
 		enc.Encode(idx.blocks),
@@ -84,15 +96,16 @@ func (idx *Index) Write(w io.Writer) error {
 	)
 
 	if err != nil {
-		err = fmt.Errorf("hyb: write failed (%v)", err)
+		err = fmt.Errorf("hyb: encode failed (%v)", err)
 	}
 
-	return err
+	return buf.Bytes(), err
 }
 
-// Read deserializes the index.
-func (idx *Index) Read(r io.Reader) error {
-	dec := gob.NewDecoder(r)
+// GobDecode decodes an index from gob streams.
+func (idx *Index) GobDecode(data []byte) error {
+	buf := bytes.NewReader(data)
+	dec := gob.NewDecoder(buf)
 
 	err := checkErr(
 		dec.Decode(&idx.blocks),
@@ -103,7 +116,7 @@ func (idx *Index) Read(r io.Reader) error {
 	)
 
 	if err != nil {
-		err = fmt.Errorf("hyb: read failed (%v)", err)
+		err = fmt.Errorf("hyb: decode failed (%v)", err)
 	}
 
 	return err
