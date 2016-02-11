@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -21,6 +22,12 @@ func TestBuildEmpty(t *testing.T) {
 	assert.NotNil(t, index)
 }
 
+type tdoc struct {
+	id    int
+	words []string
+	rank  int
+}
+
 func TestBuild(t *testing.T) {
 	file, err := os.Open("files/books.txt.gz")
 	assert.Nil(t, err)
@@ -30,11 +37,12 @@ func TestBuild(t *testing.T) {
 	assert.Nil(t, err)
 	defer fgzip.Close()
 
-	idwords := map[int][]string{}
+	mapidx := map[int]tdoc{}
 	scanner := bufio.NewScanner(fgzip)
 	for i := 0; scanner.Scan(); i++ {
 		words := strings.Fields(strings.ToLower(scanner.Text()))
-		idwords[i] = words
+		sort.Strings(words)
+		mapidx[i] = tdoc{i, words, i}
 	}
 
 	b := NewBuilder()
@@ -45,8 +53,8 @@ func TestBuild(t *testing.T) {
 	}
 
 	// Add items
-	for id, words := range idwords {
-		b.Add(id, words, 0)
+	for id, doc := range mapidx {
+		b.Add(id, doc.words, doc.rank)
 	}
 
 	// Overwrite items
@@ -60,59 +68,51 @@ func TestBuild(t *testing.T) {
 		"and",
 		"everything",
 	}
-	idwords[42] = w
-	b.Add(42, w, 0)
+	sort.Strings(w)
+	mapidx[42] = tdoc{42, w, 42}
+	b.Add(42, w, 42)
 
 	// Delete some items
 	for i := 50; i < 100; i++ {
-		delete(idwords, i)
+		delete(mapidx, i)
 		b.Delete(i)
 	}
 
 	index := b.Build()
-	nidwords := parseIndex(index)
-	assert.Equal(t, len(idwords), len(nidwords))
+	pindex := parseIndex(index)
 
-Exit:
-	for id, words := range idwords {
-		nwords, ok := nidwords[id]
-
-		if !assert.True(t, ok) {
+	assert.Equal(t, len(mapidx), len(pindex))
+	for id, doc := range mapidx {
+		if !assert.Equal(t, doc.words, pindex[id].words) {
 			break
-		}
-
-		if !assert.Equal(t, len(words), len(nwords)) {
-			break
-		}
-
-		for _, w := range nwords {
-			if !assert.Contains(t, words, w) {
-				break Exit
-			}
 		}
 	}
 }
 
-// parseIndex transforms the given index to
-// a map with document id as key and document
-// keywords as value.
-func parseIndex(index *Index) map[int][]string {
+func parseIndex(index *Index) map[int]tdoc {
 	ids := []uint32{}
 	words := []uint32{}
-	idwords := map[int][]string{}
+	ranks := []uint32{}
+	mapidx := map[int]tdoc{}
 	for _, b := range index.blocks {
 		for _, p := range b.posts {
 			bp128.Unpack(p.ids, &ids)
 			bp128.Unpack(p.words, &words)
+			bp128.Unpack(p.ranks, &ranks)
 
 			for i, id := range ids {
 				word := index.words[index.freqword[words[i]]]
-				wslice := idwords[int(id)]
-				wslice = append(wslice, word)
-				idwords[int(id)] = wslice
+
+				doc := mapidx[int(id)]
+				doc.id = int(id)
+				doc.words = append(doc.words, word)
+				doc.rank = int(ranks[i])
+				sort.Strings(doc.words)
+
+				mapidx[int(id)] = doc
 			}
 		}
 	}
 
-	return idwords
+	return mapidx
 }

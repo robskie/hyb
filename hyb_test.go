@@ -149,6 +149,7 @@ func TestIndexWriteRead(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, idx, nidx)
+	assert.Equal(t, parseIndex(idx), parseIndex(nidx))
 }
 
 func BenchmarkIndexSearch(b *testing.B) {
