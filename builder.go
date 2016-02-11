@@ -285,9 +285,13 @@ func (b *Builder) Build() *Index {
 	for i, blk := range blocks {
 
 		// Create arrays for packing
-		pids := make([]uint32, blk.length)
-		pwords := make([]uint32, blk.length)
-		pranks := make([]uint32, blk.length)
+		pids := []uint32{}
+		pwords := []uint32{}
+		pranks := []uint32{}
+		bp128.MakeAlignedSlice(blk.length, &pids)
+		bp128.MakeAlignedSlice(blk.length, &pwords)
+		bp128.MakeAlignedSlice(blk.length, &pranks)
+
 		for j, p := range blk.posts {
 			pids[j] = uint32(p.id)
 			pranks[j] = uint32(p.rank)

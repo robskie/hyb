@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
-	"unsafe"
 
 	"github.com/robskie/bp128"
 )
@@ -317,12 +316,12 @@ func intersect(
 	wrange *[2]uint32,
 	freqword []uint32) ([]iposting, []completion) {
 
-	const offset = 4
-	buffer := make([]uint32, (postingsChunkSize+offset)*3)
+	buffer := []uint32{}
+	bp128.MakeAlignedSlice(postingsChunkSize*3, &buffer)
 
-	ids := align(buffer[0:])
-	words := align(ids[postingsChunkSize:])
-	ranks := align(words[postingsChunkSize:])
+	ids := buffer[0:]
+	words := ids[postingsChunkSize:]
+	ranks := words[postingsChunkSize:]
 
 	i, j := 0, 0
 	out := make([]iposting, 0, cout)
@@ -450,20 +449,6 @@ func calcLen(query string, charfreq [][]uint32) int {
 	}
 
 	return cout
-}
-
-// align returns a 16-byte aligned subarray
-// of the given array. Returns nil if it cannot
-// find an aligned subarray.
-func align(a []uint32) []uint32 {
-	for i := range a {
-		addr := unsafe.Pointer(&a[i])
-		if uintptr(addr)&15 == 0 {
-			return a[i:]
-		}
-	}
-
-	return nil
 }
 
 func checkErr(err ...error) error {
